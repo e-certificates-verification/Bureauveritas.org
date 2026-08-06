@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Certificate Verification</title>
+  <style>
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:Arial,Helvetica,sans-serif;
+      background:#eef2f6;
+      color:#222;
+    }
+    .wrap{
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+    }
+    .card{
+      width:100%;
+      max-width:620px;
+      background:#fff;
+      border-radius:16px;
+      box-shadow:0 14px 40px rgba(0,0,0,.12);
+      padding:32px;
+    }
+    h1{
+      margin:0 0 10px;
+      text-align:center;
+      font-size:30px;
+      color:#123c69;
+    }
+    p{
+      text-align:center;
+      color:#667;
+      line-height:1.6;
+      margin:0 0 24px;
+    }
+    label{
+      display:block;
+      font-weight:700;
+      margin-bottom:8px;
+    }
+    .row{
+      display:flex;
+      gap:10px;
+    }
+    input{
+      flex:1;
+      min-width:0;
+      padding:14px 15px;
+      border:1px solid #bcc8d4;
+      border-radius:9px;
+      font-size:16px;
+      outline:none;
+      text-transform:uppercase;
+    }
+    input:focus{
+      border-color:#1b66a5;
+      box-shadow:0 0 0 4px rgba(27,102,165,.12);
+    }
+    button{
+      border:0;
+      border-radius:9px;
+      padding:14px 22px;
+      background:#123c69;
+      color:#fff;
+      font-weight:700;
+      font-size:15px;
+      cursor:pointer;
+    }
+    button:disabled{
+      opacity:.65;
+      cursor:not-allowed;
+    }
+    .message{
+      display:none;
+      margin-top:18px;
+      padding:14px;
+      border-radius:9px;
+      text-align:center;
+      font-weight:700;
+    }
+    .error{
+      display:block;
+      color:#a11212;
+      background:#fdeaea;
+      border:1px solid #efbcbc;
+    }
+    .loading{
+      display:block;
+      color:#174d78;
+      background:#eaf4fc;
+      border:1px solid #bfdcf0;
+    }
+    .hint{
+      margin-top:10px;
+      text-align:left;
+      font-size:13px;
+      color:#778;
+    }
+    @media(max-width:560px){
+      .card{padding:22px}
+      h1{font-size:25px}
+      .row{flex-direction:column}
+      button{width:100%}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <main class="card">
+      <h1>Certificate Verification</h1>
+      <p>Enter the certificate number exactly as shown on the document.</p>
+
+      <label for="certificateNumber">Certificate Number</label>
+      <div class="row">
+        <input
+          id="certificateNumber"
+          type="text"
+          placeholder="148-2026-001029-EN"
+          autocomplete="off"
+        />
+        <button id="searchButton" type="button" onclick="openCertificate()">Search</button>
+      </div>
+
+      <div class="hint">Do not type “.pdf”.</div>
+      <div id="message" class="message"></div>
+    </main>
+  </div>
+
+  <script>
+    async function openCertificate() {
+      const input = document.getElementById("certificateNumber");
+      const button = document.getElementById("searchButton");
+      const message = document.getElementById("message");
+
+      const certificateNumber = input.value
+        .trim()
+        .replace(/\.pdf$/i, "")
+        .toUpperCase();
+
+      if (!certificateNumber) {
+        message.className = "message error";
+        message.textContent = "Please enter a certificate number.";
+        input.focus();
+        return;
+      }
+
+      // Only allow safe filename characters.
+      if (!/^[A-Z0-9_-]+$/.test(certificateNumber)) {
+        message.className = "message error";
+        message.textContent = "Invalid certificate number format.";
+        return;
+      }
+
+      const pdfFile = encodeURIComponent(certificateNumber) + ".pdf";
+
+      button.disabled = true;
+      message.className = "message loading";
+      message.textContent = "Searching for certificate...";
+
+      try {
+        const response = await fetch(pdfFile, {
+          method: "HEAD",
+          cache: "no-store"
+        });
+
+        if (response.ok) {
+          window.location.href = pdfFile;
+          return;
+        }
+
+        message.className = "message error";
+        message.textContent = "Certificate not found. Please check the number and try again.";
+      } catch (error) {
+        message.className = "message error";
+        message.textContent = "Unable to check the certificate right now. Please try again.";
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    document.getElementById("certificateNumber").addEventListener("keydown", function(event) {
+      if (event.key === "Enter") {
+        openCertificate();
+      }
+    });
+  </script>
+</body>
+</html>
