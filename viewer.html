@@ -4,160 +4,200 @@
 <meta charset="UTF-8">
 <meta name="viewport"
       content="width=device-width, initial-scale=1">
-<title>PDF Document Viewer</title>
+<title>Document PDF Viewer</title>
 
 <style>
-* {
-  box-sizing: border-box;
-}
+  * {
+    box-sizing: border-box;
+  }
 
-body {
-  margin: 0;
-  background: #e8edf2;
-  font-family: Arial, sans-serif;
-}
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    min-height: 100%;
+    background: #ffffff;
+  }
 
-.toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px;
-  background: #17365d;
-  color: white;
-}
+  body {
+    font-family: Arial, sans-serif;
+  }
 
-button {
-  padding: 8px 12px;
-  border: 0;
-  border-radius: 6px;
-  cursor: pointer;
-}
+  #pages {
+    width: 100%;
+    min-height: 100dvh;
+    margin: 0;
+    padding: 0;
+    background: white;
+  }
 
-#pages {
-  width: 100%;
-  margin: auto;
-}
+  .pdf-page {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin: 0;
+    padding: 0;
+  }
 
-.page {
-  display: block;
-  width: 100%;
-  height: auto;
-  margin: 0 auto 8px;
-}
-
-#message {
-  text-align: center;
-  padding: 20px;
-}
+  #message {
+    padding: 24px 16px;
+    text-align: center;
+    color: #333;
+    font-size: 15px;
+  }
 </style>
 </head>
 
 <body>
 
-<div class="toolbar">
-  <span>PDF Viewer</span>
-  <div>
-    <button onclick="zoom(-0.2)">−</button>
-    <button onclick="zoom(0.2)">+</button>
-  </div>
-</div>
-
-<div id="message">Loading document...</div>
-<div id="pages"></div>
+<div id="message">Loading PDF...</div>
+<main id="pages"></main>
 
 <script type="module">
 import * as pdfjsLib from
-"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc =
-"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
 
-const params = new URLSearchParams(location.search);
+const params = new URLSearchParams(
+  window.location.search
+);
+
 const file = params.get("file");
 
-const pages = document.getElementById("pages");
-const message = document.getElementById("message");
+const pagesContainer =
+  document.getElementById("pages");
 
-let pdf = null;
-let zoomLevel = 1;
+const message =
+  document.getElementById("message");
 
-async function render() {
-  pages.innerHTML = "";
+let pdfDocument = null;
+let rendering = false;
 
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
+async function renderPDF() {
+  if (!pdfDocument || rendering) return;
 
-    const base = page.getViewport({ scale: 1 });
-    const scale =
-      (pages.clientWidth / base.width) * zoomLevel;
+  rendering = true;
 
-    const viewport = page.getViewport({ scale });
+  try {
+    pagesContainer.innerHTML = "";
 
-    const canvas = document.createElement("canvas");
-    canvas.className = "page";
+    const containerWidth =
+      pagesContainer.clientWidth;
 
-    const context = canvas.getContext("2d");
+    const pixelRatio = Math.min(
+      window.devicePixelRatio || 1,
+      3
+    );
 
-    canvas.width = Math.ceil(viewport.width);
-    canvas.height = Math.ceil(viewport.height);
+    for (
+      let pageNumber = 1;
+      pageNumber <= pdfDocument.numPages;
+      pageNumber++
+    ) {
+      const page =
+        await pdfDocument.getPage(pageNumber);
 
-    pages.appendChild(canvas);
+      const baseViewport =
+        page.getViewport({ scale: 1 });
 
-    await page.render({
-      canvasContext: context,
-      viewport: viewport
-    }).promise;
+      const scale =
+        containerWidth / baseViewport.width;
+
+      const viewport =
+        page.getViewport({ scale });
+
+      const canvas =
+        document.createElement("canvas");
+
+      canvas.className = "pdf-page";
+
+      const context =
+        canvas.getContext("2d", {
+          alpha: false
+        });
+
+      canvas.width = Math.ceil(
+        viewport.width * pixelRatio
+      );
+
+      canvas.height = Math.ceil(
+        viewport.height * pixelRatio
+      );
+
+      canvas.style.width =
+        viewport.width + "px";
+
+      canvas.style.height =
+        viewport.height + "px";
+
+      pagesContainer.appendChild(canvas);
+
+      await page.render({
+        canvasContext: context,
+        viewport: viewport,
+        transform: [
+          pixelRatio, 0,
+          0, pixelRatio,
+          0, 0
+        ]
+      }).promise;
+    }
+  } finally {
+    rendering = false;
   }
 }
 
-window.zoom = async function(amount) {
-  if (!pdf) return;
-
-  zoomLevel = Math.max(
-    0.5,
-    Math.min(3, zoomLevel + amount)
-  );
-
-  await render();
-};
-
-async function load() {
+async function loadPDF() {
   if (!file) {
     message.textContent =
-      "No PDF selected. Add ?file=filename.pdf";
+      "No PDF selected.";
     return;
   }
 
-  // Only PDF files within this GitHub Pages site.
   if (
     !file.toLowerCase().endsWith(".pdf") ||
     file.includes("..") ||
     file.startsWith("/") ||
+    file.includes("\\") ||
     file.includes(":") ||
-    file.includes("\\")
+    file.includes("?") ||
+    file.includes("#")
   ) {
-    message.textContent = "Invalid PDF path.";
+    message.textContent =
+      "Invalid PDF file path.";
     return;
   }
 
   try {
-    const url = new URL(file, location.href);
+    const pdfURL = new URL(
+      file,
+      window.location.href
+    );
 
-    pdf = await pdfjsLib.getDocument(url.href).promise;
+    if (pdfURL.origin !== window.location.origin) {
+      throw new Error("Invalid PDF origin");
+    }
+
+    pdfDocument =
+      await pdfjsLib.getDocument(
+        pdfURL.href
+      ).promise;
 
     message.style.display = "none";
-    await render();
+
+    await renderPDF();
+
   } catch (error) {
+    message.style.display = "block";
     message.textContent =
-      "Unable to open PDF. Check the file name.";
+      "Unable to load PDF. Check the file name.";
     console.error(error);
   }
 }
 
-load();
+loadPDF();
 </script>
 
 </body>
