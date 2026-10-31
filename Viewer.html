@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1">
+<title>PDF Document Viewer</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #e8edf2;
+  font-family: Arial, sans-serif;
+}
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  background: #17365d;
+  color: white;
+}
+
+button {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#pages {
+  width: 100%;
+  margin: auto;
+}
+
+.page {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 auto 8px;
+}
+
+#message {
+  text-align: center;
+  padding: 20px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="toolbar">
+  <span>PDF Viewer</span>
+  <div>
+    <button onclick="zoom(-0.2)">−</button>
+    <button onclick="zoom(0.2)">+</button>
+  </div>
+</div>
+
+<div id="message">Loading document...</div>
+<div id="pages"></div>
+
+<script type="module">
+import * as pdfjsLib from
+"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
+
+const params = new URLSearchParams(location.search);
+const file = params.get("file");
+
+const pages = document.getElementById("pages");
+const message = document.getElementById("message");
+
+let pdf = null;
+let zoomLevel = 1;
+
+async function render() {
+  pages.innerHTML = "";
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+
+    const base = page.getViewport({ scale: 1 });
+    const scale =
+      (pages.clientWidth / base.width) * zoomLevel;
+
+    const viewport = page.getViewport({ scale });
+
+    const canvas = document.createElement("canvas");
+    canvas.className = "page";
+
+    const context = canvas.getContext("2d");
+
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+
+    pages.appendChild(canvas);
+
+    await page.render({
+      canvasContext: context,
+      viewport: viewport
+    }).promise;
+  }
+}
+
+window.zoom = async function(amount) {
+  if (!pdf) return;
+
+  zoomLevel = Math.max(
+    0.5,
+    Math.min(3, zoomLevel + amount)
+  );
+
+  await render();
+};
+
+async function load() {
+  if (!file) {
+    message.textContent =
+      "No PDF selected. Add ?file=filename.pdf";
+    return;
+  }
+
+  // Only PDF files within this GitHub Pages site.
+  if (
+    !file.toLowerCase().endsWith(".pdf") ||
+    file.includes("..") ||
+    file.startsWith("/") ||
+    file.includes(":") ||
+    file.includes("\\")
+  ) {
+    message.textContent = "Invalid PDF path.";
+    return;
+  }
+
+  try {
+    const url = new URL(file, location.href);
+
+    pdf = await pdfjsLib.getDocument(url.href).promise;
+
+    message.style.display = "none";
+    await render();
+  } catch (error) {
+    message.textContent =
+      "Unable to open PDF. Check the file name.";
+    console.error(error);
+  }
+}
+
+load();
+</script>
+
+</body>
+</html>
